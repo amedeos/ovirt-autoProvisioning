@@ -1,0 +1,6 @@
+[Auth]
+Username: admin@internal
+Password: SECRET
+Hostname: enginefqdn-or-ip
+Protocol: https
+Port:     443

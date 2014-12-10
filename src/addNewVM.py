@@ -52,7 +52,8 @@ SPASSWORD = ''
 EXIT_ON = ''
 
 parser = OptionParser()
-usagestr = "usage: %prog [--debug NUMBER] --authfile AUTHFILE --datacenter DATACENTERNAME --cluster CLUSTERNAME --os OSVERSION"
+usagestr = "usage: %prog [--debug NUMBER] --authfile AUTHFILE --datacenter DATACENTERNAME "
+usagestr = usagestr + "--cluster CLUSTERNAME --os OSVERSION --vmname VMNAME"
 
 parser = OptionParser(usage=usagestr, version="%prog Version: " + VERSION)
 
@@ -71,6 +72,9 @@ parser.add_option("--cluster", type="string",dest="CLUSTER",
 parser.add_option("--os", type="string",dest="OSVERSION",
                   help="Operating system verion, eg rhel_6x64")
 
+parser.add_option("--vmname", type="string",dest="VMNAME",
+                  help="VM Name")
+
 (options, args) = parser.parse_args()
 
 if options.AUTH_FILE == "" or not options.AUTH_FILE:
@@ -78,21 +82,26 @@ if options.AUTH_FILE == "" or not options.AUTH_FILE:
     sys.exit(1)
 
 if options.DATACENTER == "" or not options.DATACENTER:
-    parser.error("incorrect number of arguments")
+    parser.error("incorrect number of arguments, no datacenter")
     sys.exit(1)
 
 if options.CLUSTER == "" or not options.CLUSTER:
-    parser.error("incorrect number of arguments")
+    parser.error("incorrect number of arguments, no cluster")
     sys.exit(1)
 
 if options.OSVERSION == "" or not options.OSVERSION:
-    parser.error("incorrect number of arguments")
+    parser.error("incorrect number of arguments, no os")
+    sys.exit(1)
+
+if options.VMNAME == "" or not options.VMNAME:
+    parser.error("incorrect number of arguments, no vmname")
     sys.exit(1)
 
 AUTH_FILE = options.AUTH_FILE
 DATACENTER = options.DATACENTER
 CLUSTER = options.CLUSTER
 OSVERSION = options.OSVERSION
+VMNAME = options.VMNAME
 
 if options.DEBUGOPT:
     if type( options.DEBUGOPT ) == int:
@@ -199,6 +208,14 @@ def getTemplateFromOS( osversion, datacentername ):
                 print ( "Template %s is for os %s and NOT for os %s " %( t.get_name(), t.get_os().get_type(), osversion ) )
     return tname
 
+def checkVMName( vmname ):
+    if( DEBUG > 0):
+        print ( "Check if vm name %s already exist..." %( vmname ) )
+    vm1 = api.vms.get(name = vmname)
+    if vm1 != None:
+        print ( "Error: VM %s is already present...Exit" %( vmname ) )
+        sys.exit(1)
+
 # connect to engine
 try:
     if( DEBUG > 0):
@@ -225,6 +242,11 @@ try:
         sys.exit(1)
     if( DEBUG > 0):
         print ( "Using template %s" %( templatename ) )
+
+    # check if vmname already exist
+    EXIT_ON = "CHECKVMNAME"
+    checkVMName(VMNAME)
+    print "Eccoci"
 except:
     if EXIT_ON == '':
         print 'Error: Connection failed to server: ' + ENGINE_CONN

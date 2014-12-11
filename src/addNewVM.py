@@ -51,9 +51,15 @@ SPASSWORD = ''
 
 EXIT_ON = ''
 
+MB = 1024*1024
+GB = 1024*MB
+#FIXME: make SLEEPTIME an optional parameter
+SLEEPTIME = 10
+
 parser = OptionParser()
 usagestr = "usage: %prog [--debug NUMBER] --authfile AUTHFILE --datacenter DATACENTERNAME "
-usagestr = usagestr + "--cluster CLUSTERNAME --os OSVERSION --vmname VMNAME"
+usagestr = usagestr + "--cluster CLUSTERNAME --os OSVERSION --vmname VMNAME "
+usagestr = usagestr + "--memory GB"
 
 parser = OptionParser(usage=usagestr, version="%prog Version: " + VERSION)
 
@@ -74,6 +80,9 @@ parser.add_option("--os", type="string",dest="OSVERSION",
 
 parser.add_option("--vmname", type="string",dest="VMNAME",
                   help="VM Name")
+
+parser.add_option("--memory", type="string",dest="MEMORY",
+                  help="Memory on GB")
 
 (options, args) = parser.parse_args()
 
@@ -97,11 +106,19 @@ if options.VMNAME == "" or not options.VMNAME:
     parser.error("incorrect number of arguments, no vmname")
     sys.exit(1)
 
+if options.MEMORY == "" or not options.MEMORY:
+    parser.error("incorrect number of arguments, no memory")
+    sys.exit(1)
+elif not str(options.MEMORY).isdigit():
+    parser.error("Memory must be digit")
+    sys.exit(1)
+
 AUTH_FILE = options.AUTH_FILE
 DATACENTER = options.DATACENTER
 CLUSTER = options.CLUSTER
 OSVERSION = options.OSVERSION
 VMNAME = options.VMNAME
+MEMORY = int(options.MEMORY)
 
 if options.DEBUGOPT:
     if type( options.DEBUGOPT ) == int:
@@ -246,7 +263,27 @@ try:
     # check if vmname already exist
     EXIT_ON = "CHECKVMNAME"
     checkVMName(VMNAME)
-    print "Eccoci"
+
+    #now try to create a new vm
+    try:
+        if( DEBUG > 0):
+            print ( "Creating VM %s..." %( VMNAME ) )
+        api.vms.add(params.VM(name=VMNAME, memory=MEMORY*GB, cluster=api.clusters.get(CLUSTER),
+                              template=api.templates.get(templatename), description='PROVA',
+                              disks=params.Disks(clone=True)
+                              ))
+        #now wait until is down
+        vm = api.vms.get(name=VMNAME)
+        while ( vm.get_status().state != 'down' ):
+            if( DEBUG > 0):
+                print ( "VM %s is on state %s, sleeping %s seconds" %( vm.get_name(), vm.get_status().state, str( SLEEPTIME ) ) )
+            sleep(SLEEPTIME)
+            vm = api.vms.get(name=VMNAME)
+
+        #rename disk alias
+    except Exception, err:
+        print ( "Error on creating a new vm %s" %( VMNAME ) )
+        print Exception, err
 except:
     if EXIT_ON == '':
         print 'Error: Connection failed to server: ' + ENGINE_CONN

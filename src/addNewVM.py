@@ -233,6 +233,25 @@ def checkVMName( vmname ):
         print ( "Error: VM %s is already present...Exit" %( vmname ) )
         sys.exit(1)
 
+def updateDiskAlias( vmname ):
+    if( DEBUG > 0):
+        print ( "Updating disk alias for VM %s" %( vmname ) )
+    try:
+        vm = api.vms.get(name=vmname)
+        vmdisk = vm.disks.list()[0]
+        if vmdisk.get_status().state == 'ok':
+            if( DEBUG > 1):
+                print ( "Disk %s is on ok status, continue" %( vmdisk.get_alias() ) )
+            dname = str(vmname) + '_Disk1'
+            vmdisk.set_alias( dname )
+            vmdisk.update()
+        else:
+            print ( "Error: disk is not on ok status...Exit" )
+    except Exception, err:
+        print ( "Error on updating disk alias for VM %s" %( vmname ) )
+        print Exception, err
+        sys.exit(1)
+
 # connect to engine
 try:
     if( DEBUG > 0):
@@ -268,10 +287,16 @@ try:
     try:
         if( DEBUG > 0):
             print ( "Creating VM %s..." %( VMNAME ) )
+        sdesc = "Created by addNewVM.py"
+        # 70% memory guaranteed
+        mguaranteed = int(MEMORY*GB*0.70)
         api.vms.add(params.VM(name=VMNAME, memory=MEMORY*GB, cluster=api.clusters.get(CLUSTER),
-                              template=api.templates.get(templatename), description='PROVA',
-                              disks=params.Disks(clone=True)
+                              template=api.templates.get(templatename), description=sdesc,
+                              memory_policy=params.MemoryPolicy(guaranteed=mguaranteed),
+                              disks=params.Disks(clone=False)
                               ))
+        if( DEBUG > 0):
+            print ( "VM %s created, waiting to disk allocation (preallocated disk)" %( VMNAME ) )
         #now wait until is down
         vm = api.vms.get(name=VMNAME)
         while ( vm.get_status().state != 'down' ):
@@ -280,10 +305,19 @@ try:
             sleep(SLEEPTIME)
             vm = api.vms.get(name=VMNAME)
 
-        #rename disk alias
     except Exception, err:
         print ( "Error on creating a new vm %s" %( VMNAME ) )
         print Exception, err
+
+    #rename disk alias
+    EXIT_ON = "UPDATEDISKALIAS"
+    updateDiskAlias( VMNAME )
+
+    #TODO: make cpu a parameter and update VM properties
+
+    #finish
+    print ( "Created VM %s from template %s, with memory %sGB" %( VMNAME, templatename, MEMORY ) )
+
 except:
     if EXIT_ON == '':
         print 'Error: Connection failed to server: ' + ENGINE_CONN

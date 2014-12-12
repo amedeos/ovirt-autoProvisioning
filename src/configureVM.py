@@ -37,7 +37,7 @@ import ConfigParser
 import os.path
 import re
 from subprocess import call
-from addNewVM import VMNAME
+import socket
 
 DEBUG = 0
 
@@ -57,7 +57,7 @@ SLEEPTIME = 10
 
 parser = OptionParser()
 usagestr = "usage: %prog [--debug NUMBER] --authfile AUTHFILE --vmname VMNAME "
-usagestr = usagestr + " "
+usagestr = usagestr + "--ip IPADDRESS --netmask NETMASK"
 
 parser = OptionParser(usage=usagestr, version="%prog Version: " + VERSION)
 
@@ -70,6 +70,12 @@ parser.add_option("--authfile", type="string",dest="AUTH_FILE",
 parser.add_option("--vmname", type="string",dest="VMNAME",
                   help="VM Name")
 
+parser.add_option("--ip", type="string",dest="IP",
+                  help="IP Address")
+
+parser.add_option("--netmask", type="string",dest="NETMASK",
+                  help="Netmask")
+
 (options, args) = parser.parse_args()
 
 if options.AUTH_FILE == "" or not options.AUTH_FILE:
@@ -80,8 +86,24 @@ if options.VMNAME == "" or not options.VMNAME:
     parser.error("incorrect number of arguments, no vmname")
     sys.exit(1)
 
+if options.IP == "" or not options.IP:
+    parser.error("incorrect number of arguments, no IP address")
+    sys.exit(1)
+
+if options.NETMASK == "" or not options.NETMASK:
+    parser.error("incorrect number of arguments, no netmask")
+    sys.exit(1)
+
 AUTH_FILE = options.AUTH_FILE
 VMNAME = options.VMNAME
+IP = options.IP
+NETMASK = options.NETMASK
+try:
+    socket.inet_aton(IP)
+    socket.inet_aton(NETMASK)
+except socket.error:
+    parser.error("IP / Netmask illegal")
+    sys.exit(1)
 
 if options.DEBUGOPT:
     if type( options.DEBUGOPT ) == int:
@@ -90,8 +112,9 @@ else:
     DEBUG = 0
 
 if( DEBUG > 0 ):
-    print "Authorization filename: '" + AUTH_FILE + "'"
-    print "Data Center name: '" + VMNAME + "'"
+    print ( "Authorization filename: %s " %(AUTH_FILE) )
+    print ( "VM name: %s " %(VMNAME) )
+    print ( "IP Address: %s " %(IP) )
 
 # get auth user / pass
 try:
@@ -132,6 +155,28 @@ except:
     print "Error on reading auth file: " + AUTH_FILE
     sys.exit(1)
 
+def checkVM( vmname ):
+    try:
+        if( DEBUG > 0):
+            print ( "Checking if vm %s exist..." %(vmname) )
+        vm = api.vms.get(name=vmname)
+        if vm != None:
+            if( DEBUG > 0):
+                print ( "VM %s exist, now check if is down" %(vmname) )
+            if vm.get_status().state == 'down':
+                if( DEBUG > 0):
+                    print ( "VM %s is down, continue" %(vmname) )
+            else:
+                print ( "Error: VM %s is not down is on status %s, Exit" %(vmname, vm.get_status().state) )
+                sys.exit(1)
+        else:
+            print ( "Error: VM %s doesn't exist, Exit" %(vmname) )
+            sys.exit(1)
+    except Exception, err:
+        print ( "Error on check status for vm %s" %( vmname ) )
+        print Exception, err
+        sys.exit(1)
+
 # connect to engine
 try:
     if( DEBUG > 0):
@@ -141,6 +186,10 @@ try:
     api = API(ENGINE_CONN, insecure=True, username=SUSERNAME, password=SPASSWORD)
     if( DEBUG > 0):
         print 'Connection established to the engine: ' + ENGINE_CONN
+
+    #check if vm exist and is down
+    EXIT_ON = 'CHECKVM'
+    checkVM( VMNAME )
 except:
     if EXIT_ON == '':
         print 'Error: Connection failed to server: ' + ENGINE_CONN

@@ -155,8 +155,13 @@ else:
     DEBUG = 0
 
 if( DEBUG > 0 ):
-    print "Authorization filename: '" + AUTH_FILE + "'"
-    print "Data Center name: '" + DATACENTER + "'"
+    print ( "Authorization filename: %s " %(AUTH_FILE) )
+    print ( "Data Center name: %s " %(DATACENTER) )
+    print ( "Cluster name: %s " %(CLUSTER) )
+    print ( "OS Version: %s " %(OSVERSION) )
+    print ( "VM name: %s " %(VMNAME) )
+    print ( "Memory: %s " %(MEMORY) )
+    print ( "CPU: %s " %(CPU) )
 
 # get auth user / pass
 try:

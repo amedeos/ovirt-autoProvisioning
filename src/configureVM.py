@@ -43,6 +43,8 @@ DEBUG = 0
 
 VERSION = "0.0.1"
 
+DOMAIN = 'fondiaria-sai.it'
+
 SHOSTNAME = ''
 SPORT = ''
 SPROTOCOL = ''
@@ -57,7 +59,8 @@ SLEEPTIME = 10
 
 parser = OptionParser()
 usagestr = "usage: %prog [--debug NUMBER] --authfile AUTHFILE --vmname VMNAME "
-usagestr = usagestr + "--ip IPADDRESS --netmask NETMASK"
+usagestr = usagestr + "--ip IPADDRESS --netmask NETMASK --gateway GATEWAY "
+usagestr = usagestr + "--sshkey SSHPRIVATEKEY"
 
 parser = OptionParser(usage=usagestr, version="%prog Version: " + VERSION)
 
@@ -75,6 +78,12 @@ parser.add_option("--ip", type="string",dest="IP",
 
 parser.add_option("--netmask", type="string",dest="NETMASK",
                   help="Netmask")
+
+parser.add_option("--gateway", type="string",dest="GATEWAY",
+                  help="GATEWAY")
+
+parser.add_option("--sshkey", type="string",dest="SSHKEY",
+                  help="SSH private key to use, alse public key must be on same path")
 
 (options, args) = parser.parse_args()
 
@@ -94,16 +103,29 @@ if options.NETMASK == "" or not options.NETMASK:
     parser.error("incorrect number of arguments, no netmask")
     sys.exit(1)
 
+if options.GATEWAY == "" or not options.GATEWAY:
+    parser.error("incorrect number of arguments, no gateway")
+    sys.exit(1)
+
+if options.SSHKEY == "" or not options.SSHKEY:
+    parser.error("incorrect number of arguments, no ssh private key")
+    sys.exit(1)
+
 AUTH_FILE = options.AUTH_FILE
 VMNAME = options.VMNAME
 IP = options.IP
 NETMASK = options.NETMASK
+#TODO: automatic calculation of ip address of gateway
+GATEWAY = options.GATEWAY
 try:
     socket.inet_aton(IP)
     socket.inet_aton(NETMASK)
+    socket.inet_aton(GATEWAY)
 except socket.error:
-    parser.error("IP / Netmask illegal")
+    parser.error("IP / Netmask or gateway illegal")
     sys.exit(1)
+
+SSHKEY = options.SSHKEY
 
 if options.DEBUGOPT:
     if type( options.DEBUGOPT ) == int:
@@ -115,6 +137,9 @@ if( DEBUG > 0 ):
     print ( "Authorization filename: %s " %(AUTH_FILE) )
     print ( "VM name: %s " %(VMNAME) )
     print ( "IP Address: %s " %(IP) )
+    print ( "Netmask: %s " %(NETMASK) )
+    print ( "Gateway: %s " %(GATEWAY) )
+    print ( "SSH private key: %s " %(SSHKEY) )
 
 # get auth user / pass
 try:
@@ -177,6 +202,19 @@ def checkVM( vmname ):
         print Exception, err
         sys.exit(1)
 
+def checkSshKey( sshkey ):
+    try:
+        if( DEBUG > 0):
+            print ( "Try to read private key %s" %(sshkey) )
+        open( sshkey ).read()
+        sshkeypub = '%s.pub' %(sshkey)
+        if( DEBUG > 0):
+            print ( "Try to read public key %s" %(sshkeypub) )
+        open( sshkeypub ).read()
+    except:
+        print ( "Error on reading ssh private/pub key %s" %( sshkey ) )
+        sys.exit(1)
+
 # connect to engine
 try:
     if( DEBUG > 0):
@@ -190,6 +228,10 @@ try:
     #check if vm exist and is down
     EXIT_ON = 'CHECKVM'
     checkVM( VMNAME )
+
+    #check private and pub key
+    EXIT_ON = 'CHECKSSHKEY'
+    checkSshKey( SSHKEY )
 except:
     if EXIT_ON == '':
         print 'Error: Connection failed to server: ' + ENGINE_CONN

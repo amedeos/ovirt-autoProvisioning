@@ -40,6 +40,12 @@ from subprocess import call
 
 DEBUG = 0
 
+#Variables for max memory and cpu
+#FIXME: for cpu at this moment using one core
+# to one socket it can't be greater than 16
+MAXCPU = 16
+MAXMEMORY = 64
+
 VERSION = "0.0.1"
 
 SHOSTNAME = ''
@@ -59,7 +65,7 @@ SLEEPTIME = 10
 parser = OptionParser()
 usagestr = "usage: %prog [--debug NUMBER] --authfile AUTHFILE --datacenter DATACENTERNAME "
 usagestr = usagestr + "--cluster CLUSTERNAME --os OSVERSION --vmname VMNAME "
-usagestr = usagestr + "--memory GB"
+usagestr = usagestr + "--memory GB --cpu NUM"
 
 parser = OptionParser(usage=usagestr, version="%prog Version: " + VERSION)
 
@@ -83,6 +89,9 @@ parser.add_option("--vmname", type="string",dest="VMNAME",
 
 parser.add_option("--memory", type="string",dest="MEMORY",
                   help="Memory on GB")
+
+parser.add_option("--cpu", type="string",dest="CPU",
+                  help="Number of CPUs")
 
 (options, args) = parser.parse_args()
 
@@ -113,12 +122,31 @@ elif not str(options.MEMORY).isdigit():
     parser.error("Memory must be digit")
     sys.exit(1)
 
+if options.CPU == "" or not options.CPU:
+    parser.error("incorrect number of arguments, no cpu")
+    sys.exit(1)
+elif not str(options.CPU).isdigit():
+    #FIXME: check maximum number of cpu, and value greater than zero
+    parser.error("CPUs must be digit")
+    sys.exit(1)
+
 AUTH_FILE = options.AUTH_FILE
 DATACENTER = options.DATACENTER
 CLUSTER = options.CLUSTER
 OSVERSION = options.OSVERSION
 VMNAME = options.VMNAME
 MEMORY = int(options.MEMORY)
+CPU = int(options.CPU)
+
+#now check cpu and memory value
+if MEMORY < 1 or MEMORY > MAXMEMORY:
+    serr = 'Memory must be a value between 1 and %s' %( MAXMEMORY )
+    parser.error(serr)
+    sys.exit(1)
+if CPU < 1 or CPU > MAXCPU:
+    serr = 'CPU must be a value between 1 and %s' %( MAXCPU )
+    parser.error(serr)
+    sys.exit(1)
 
 if options.DEBUGOPT:
     if type( options.DEBUGOPT ) == int:
@@ -252,6 +280,22 @@ def updateDiskAlias( vmname ):
         print Exception, err
         sys.exit(1)
 
+def updateCpuNumber( vmname, cpunum ):
+    if( DEBUG > 0):
+        print ( "Updating CPU number for VM %s setting total CPU to: %s" %( vmname, cpunum ) )
+    #check if is down
+    try:
+        vm = api.vms.get(name=vmname)
+        if vm.get_status().state == 'down':
+            c1 = vm.get_cpu()
+            c1.set_topology(params.CpuTopology(cores=1,sockets=cpunum))
+            vm.set_cpu(c1)
+            vm.update()
+    except Exception, err:
+        print ( "Error on updating CPU for VM %s" %( vmname ) )
+        print Exception, err
+        sys.exit(1)
+
 # connect to engine
 try:
     if( DEBUG > 0):
@@ -313,10 +357,12 @@ try:
     EXIT_ON = "UPDATEDISKALIAS"
     updateDiskAlias( VMNAME )
 
-    #TODO: make cpu a parameter and update VM properties
+    #update cpu number
+    EXIT_ON = "UPDATECPU"
+    updateCpuNumber(VMNAME, CPU)
 
     #finish
-    print ( "Created VM %s from template %s, with memory %sGB" %( VMNAME, templatename, MEMORY ) )
+    print ( "Created VM %s from template %s, with %sGB memory and %s CPU" %( VMNAME, templatename, MEMORY, CPU ) )
 
 except:
     if EXIT_ON == '':

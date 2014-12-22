@@ -4,3 +4,6 @@ Password: SECRET
 Hostname: enginefqdn-or-ip
 Protocol: https
 Port:     443
+
+[Cloud-init]
+Domain  : example.com

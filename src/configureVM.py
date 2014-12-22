@@ -43,7 +43,7 @@ DEBUG = 0
 
 VERSION = "0.0.1"
 
-DOMAIN = 'fondiaria-sai.it'
+DOMAIN = ''
 
 SHOSTNAME = ''
 SPORT = ''
@@ -176,6 +176,12 @@ try:
     ENGINE_CONN = SPROTOCOL + '://' + SHOSTNAME + ':' + SPORT
     if( DEBUG > 0 ):
         print "Connection string: " + ENGINE_CONN
+
+    DOMAIN = Config.get("Cloud-init", "Domain")
+    if( DOMAIN == "" ):
+        DOMAIN = "example.com"
+    if( DEBUG > 0 ):
+        print ( "Domain name used is: %s" %(DOMAIN) )
 except:
     print "Error on reading auth file: " + AUTH_FILE
     sys.exit(1)
@@ -211,9 +217,31 @@ def checkSshKey( sshkey ):
         if( DEBUG > 0):
             print ( "Try to read public key %s" %(sshkeypub) )
         open( sshkeypub ).read()
+        if( DEBUG > 0):
+            print ( "Either private and public keys are readable, continue" )
     except:
         print ( "Error on reading ssh private/pub key %s" %( sshkey ) )
         sys.exit(1)
+
+def buildYamlFile():
+    str1 = "write_files:\n-   content: |\n"
+    str1 = str1 + "        Configured by configureVM.py on \n"
+    str1 = str1 + "        nameserver 10.191.39.13\n"
+    str1 = str1 + "        nameserver 10.191.39.14\n"
+    str1 = str1 + "    path: /etc/motd\n\n"
+    str1 = str1 + "runcmd:\n"
+    str1 = str1 + "- [ sh, -c, \"/sbin/chkconfig CA-CCS off\" ]\n"
+    str1 = str1 + "- [ sh, -c, \"/sbin/chkconfig CA-UnicenterNSM off\" ]\n"
+    str1 = str1 + "- [ sh, -c, \"/sbin/chkconfig CA-atech off\" ]\n"
+    str1 = str1 + "- [ sh, -c, \"/sbin/chkconfig CA-cam off\" ]\n"
+    str1 = str1 + "- [ sh, -c, \"/sbin/chkconfig CA-diadna off\" ]\n"
+    str1 = str1 + "- [ sh, -c, \"/sbin/chkconfig CA-has off\" ]\n"
+    str1 = str1 + "- [ sh, -c, \"/bin/cp -p -f /etc/sssd/sssd.conf /etc/sssd/sssd.conf.predr\" ]\n"
+    str1 = str1 + "- [ sh, -c, \"/bin/sed -e s/^ipa_server.*/ipa_server=itpmsblp005.fondiaria-sai.it/g /etc/sssd/sssd.conf > /etc/sssd/sssd.conf.tmp\" ]\n"
+    str1 = str1 + "- [ sh, -c, \"/bin/mv -f /etc/sssd/sssd.conf.tmp /etc/sssd/sssd.conf\" ]\n"
+    str1 = str1 + "- [ sh, -c, \"/bin/chmod 600 /etc/sssd/sssd.conf\" ]\n"
+    str1 = str1 + "- [ sh, -c, \"/sbin/service sssd restart\" ]"
+    return str1
 
 # connect to engine
 try:
@@ -232,6 +260,10 @@ try:
     #check private and pub key
     EXIT_ON = 'CHECKSSHKEY'
     checkSshKey( SSHKEY )
+
+    #now try to launch vm whith cloud-init options
+    scontent = buildYamlFile()
+    print scontent
 except:
     if EXIT_ON == '':
         print 'Error: Connection failed to server: ' + ENGINE_CONN

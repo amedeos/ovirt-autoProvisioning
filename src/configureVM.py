@@ -38,12 +38,14 @@ import os.path
 import re
 from subprocess import call
 import socket
+import datetime
 
 DEBUG = 0
 
 VERSION = "0.0.1"
 
 DOMAIN = ''
+FQDN = ''
 
 SHOSTNAME = ''
 SPORT = ''
@@ -113,12 +115,12 @@ if options.SSHKEY == "" or not options.SSHKEY:
 
 AUTH_FILE = options.AUTH_FILE
 VMNAME = options.VMNAME
-IP = options.IP
+IPADDR = options.IP
 NETMASK = options.NETMASK
 #TODO: automatic calculation of ip address of gateway
 GATEWAY = options.GATEWAY
 try:
-    socket.inet_aton(IP)
+    socket.inet_aton(IPADDR)
     socket.inet_aton(NETMASK)
     socket.inet_aton(GATEWAY)
 except socket.error:
@@ -136,7 +138,7 @@ else:
 if( DEBUG > 0 ):
     print ( "Authorization filename: %s " %(AUTH_FILE) )
     print ( "VM name: %s " %(VMNAME) )
-    print ( "IP Address: %s " %(IP) )
+    print ( "IP Address: %s " %(IPADDR) )
     print ( "Netmask: %s " %(NETMASK) )
     print ( "Gateway: %s " %(GATEWAY) )
     print ( "SSH private key: %s " %(SSHKEY) )
@@ -203,6 +205,14 @@ def checkVM( vmname ):
         else:
             print ( "Error: VM %s doesn't exist, Exit" %(vmname) )
             sys.exit(1)
+        #now check vm os version
+        osVersion = vm.get_os().get_type()
+        if (osVersion == "rhel_6x64" or osVersion == "rhel_6" or osVersion == "rhel_7x64"):
+            if( DEBUG > 0):
+                print ( "VM %s has OS version %s which support cloud-init, continue..." %( vmname, osVersion ) )
+        else:
+            print ( "Error: VM %s has OS version %s which doesn't support cloud-init, Exit" %( vmname, osVersion ) )
+            sys.exit(1)
     except Exception, err:
         print ( "Error on check status for vm %s" %( vmname ) )
         print Exception, err
@@ -219,28 +229,19 @@ def checkSshKey( sshkey ):
         open( sshkeypub ).read()
         if( DEBUG > 0):
             print ( "Either private and public keys are readable, continue" )
+        return open( sshkeypub ).read()
     except:
         print ( "Error on reading ssh private/pub key %s" %( sshkey ) )
         sys.exit(1)
 
 def buildYamlFile():
     str1 = "write_files:\n-   content: |\n"
-    str1 = str1 + "        Configured by configureVM.py on \n"
-    str1 = str1 + "        nameserver 10.191.39.13\n"
-    str1 = str1 + "        nameserver 10.191.39.14\n"
+    str1 = str1 + "        Configured by configureVM.py on " + datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S") + "\n"
     str1 = str1 + "    path: /etc/motd\n\n"
     str1 = str1 + "runcmd:\n"
-    str1 = str1 + "- [ sh, -c, \"/sbin/chkconfig CA-CCS off\" ]\n"
-    str1 = str1 + "- [ sh, -c, \"/sbin/chkconfig CA-UnicenterNSM off\" ]\n"
-    str1 = str1 + "- [ sh, -c, \"/sbin/chkconfig CA-atech off\" ]\n"
-    str1 = str1 + "- [ sh, -c, \"/sbin/chkconfig CA-cam off\" ]\n"
-    str1 = str1 + "- [ sh, -c, \"/sbin/chkconfig CA-diadna off\" ]\n"
-    str1 = str1 + "- [ sh, -c, \"/sbin/chkconfig CA-has off\" ]\n"
-    str1 = str1 + "- [ sh, -c, \"/bin/cp -p -f /etc/sssd/sssd.conf /etc/sssd/sssd.conf.predr\" ]\n"
-    str1 = str1 + "- [ sh, -c, \"/bin/sed -e s/^ipa_server.*/ipa_server=itpmsblp005.fondiaria-sai.it/g /etc/sssd/sssd.conf > /etc/sssd/sssd.conf.tmp\" ]\n"
-    str1 = str1 + "- [ sh, -c, \"/bin/mv -f /etc/sssd/sssd.conf.tmp /etc/sssd/sssd.conf\" ]\n"
-    str1 = str1 + "- [ sh, -c, \"/bin/chmod 600 /etc/sssd/sssd.conf\" ]\n"
-    str1 = str1 + "- [ sh, -c, \"/sbin/service sssd restart\" ]"
+    str1 = ("%s- [ sh, -c, \"/bin/hostname %s\" ]\n" %(str1, FQDN))
+    str1 = str1 + "- [ sh, -c, \"/root/bootstrap-standard.sh\" ]\n"
+    str1 = str1 + "- [ sh, -c, \"/root/setup-ipaclient.sh\" ]\n"
     return str1
 
 # connect to engine
@@ -259,11 +260,58 @@ try:
 
     #check private and pub key
     EXIT_ON = 'CHECKSSHKEY'
-    checkSshKey( SSHKEY )
+    SSHKEY = checkSshKey( SSHKEY )
+    if( DEBUG > 1):
+        print ( "ssh pub key is: " )
+        print SSHKEY
 
     #now try to launch vm whith cloud-init options
+    EXIT_ON = 'STARTVM'
+    FQDN = VMNAME + "." + DOMAIN
+    FQDN = FQDN.lower()
+    if( DEBUG > 1):
+        print ( "FQDN: %s" %(FQDN) )
     scontent = buildYamlFile()
-    print scontent
+    if( DEBUG > 1):
+        print ("Cloud-init user data content: ")
+        print scontent
+
+    try:
+        vm = api.vms.get(name=VMNAME)
+        action = params.Action(
+                        vm=params.VM(
+                            initialization=params.Initialization(
+                                cloud_init=params.CloudInit(
+                                    host=params.Host(address=FQDN),
+                                    authorized_keys=params.AuthorizedKeys(
+                                        authorized_key=[params.AuthorizedKey(user=params.User(user_name="root"), key=SSHKEY)]
+                                        ),
+                                    regenerate_ssh_keys=True,
+                                    users=params.Users(
+                                        user=[params.User(user_name="root", password=SPASSWORD)]
+                                        ),
+                                    network_configuration=params.NetworkConfiguration(
+                                        nics=params.Nics(nic=[params.NIC(name="eth0",
+                                                            boot_protocol="STATIC",
+                                                            on_boot=True,
+                                                            network=params.Network(ip=params.IP(
+                                                                                    address=IPADDR,
+                                                                                    netmask=NETMASK,
+                                                                                    gateway=GATEWAY)))])
+                                        ),
+                                    files=params.Files(
+                                        file=[params.File(name="/etc/motd", content=scontent, type_="PLAINTEXT")]
+                                        )
+                                    )
+                                )
+                            )
+                        )
+        if( DEBUG > 0):
+            print ( "Starting VM %s with cloud-init options" %(VMNAME) )
+        vm.start( action )
+    except Exception, err:
+        print "Error on starting VM"
+        print err
 except:
     if EXIT_ON == '':
         print 'Error: Connection failed to server: ' + ENGINE_CONN

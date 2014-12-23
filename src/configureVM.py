@@ -309,6 +309,15 @@ try:
         if( DEBUG > 0):
             print ( "Starting VM %s with cloud-init options" %(VMNAME) )
         vm.start( action )
+
+        #vm started add sleeptime
+        vm = api.vms.get(name=VMNAME)
+        while ( vm.get_status().state != 'up' ):
+            if( DEBUG > 0):
+                print ( "VM %s is on state %s, sleeping %s seconds" %( vm.get_name(), vm.get_status().state, str( SLEEPTIME ) ) )
+            sleep(SLEEPTIME)
+            vm = api.vms.get(name=VMNAME)
+        print ( "VM %s is up, with ip %s an IPA client configured, finish." %( vm.get_name(), IPADDR ) )
     except Exception, err:
         print "Error on starting VM"
         print err

@@ -42,7 +42,7 @@ import datetime
 
 DEBUG = 0
 
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 
 DOMAIN = ''
 FQDN = ''
@@ -135,13 +135,24 @@ if options.DEBUGOPT:
 else:
     DEBUG = 0
 
-if( DEBUG > 0 ):
-    print ( "Authorization filename: %s " %(AUTH_FILE) )
-    print ( "VM name: %s " %(VMNAME) )
-    print ( "IP Address: %s " %(IPADDR) )
-    print ( "Netmask: %s " %(NETMASK) )
-    print ( "Gateway: %s " %(GATEWAY) )
-    print ( "SSH private key: %s " %(SSHKEY) )
+def logDebug( strDebug, intDebug=None ):
+    global DEBUG
+    if intDebug == None:
+        intDebug = DEBUG
+        if DEBUG > 1:
+            intDebug = 1
+    if (intDebug > 0) and (intDebug < 2):
+        print ("%s DEBUG: %s" %(datetime.datetime.now(), strDebug))
+    elif intDebug > 1:
+        #always print intDebug messages if are > 1
+        print ("%s ERROR: %s" %(datetime.datetime.now(), strDebug))
+
+logDebug( "Authorization filename: %s " %(AUTH_FILE) )
+logDebug( "VM name: %s " %(VMNAME) )
+logDebug( "IP Address: %s " %(IPADDR) )
+logDebug( "Netmask: %s " %(NETMASK) )
+logDebug( "Gateway: %s " %(GATEWAY) )
+logDebug( "SSH private key: %s " %(SSHKEY) )
 
 # get auth user / pass
 try:
@@ -154,84 +165,70 @@ try:
         if len( Config.sections() ) == 0:
             print "Error: Wrong auth file: " + AUTH_FILE + ", now exit"
             sys.exit(1)
-    if( DEBUG > 0 ):
-        print "Try to read Username from " + AUTH_FILE
+    logDebug( "Try to read Username from " + AUTH_FILE )
     SUSERNAME = Config.get("Auth", "Username")
-    if( DEBUG > 0 ):
-        print "Found Username: " + SUSERNAME
-        print "Try to read Password from " + AUTH_FILE
+    logDebug( "Found Username: " + SUSERNAME )
+    logDebug( "Try to read Password from " + AUTH_FILE )
     SPASSWORD = Config.get("Auth", "Password")
-    if( DEBUG > 0 ):
-        print "Found Password: ***********"
-        print "Try to read Hostname from " + AUTH_FILE
+    logDebug( "Found Password: ***********" )
+    logDebug( "Try to read Hostname from " + AUTH_FILE )
     SHOSTNAME = Config.get("Auth", "Hostname")
-    if( DEBUG > 0 ):
-        print "Found Hostname: " + SHOSTNAME
-        print "Try to read protocol from " + AUTH_FILE
+    logDebug( "Found Hostname: " + SHOSTNAME )
+    logDebug( "Try to read protocol from " + AUTH_FILE )
     SPROTOCOL = Config.get("Auth", "Protocol")
-    if( DEBUG > 0 ):
-        print "Found Protocol: " + SPROTOCOL
-        print "Try to read Port from " + AUTH_FILE
+    logDebug( "Found Protocol: " + SPROTOCOL )
+    logDebug( "Try to read Port from " + AUTH_FILE )
     SPORT = Config.get("Auth", "Port")
-    if( DEBUG > 0 ):
-        print "Found Port: " + SPORT
+    logDebug( "Found Port: " + SPORT )
     ENGINE_CONN = SPROTOCOL + '://' + SHOSTNAME + ':' + SPORT
-    if( DEBUG > 0 ):
-        print "Connection string: " + ENGINE_CONN
+    logDebug( "Connection string: " + ENGINE_CONN )
 
     DOMAIN = Config.get("Cloud-init", "Domain")
     if( DOMAIN == "" ):
         DOMAIN = "example.com"
-    if( DEBUG > 0 ):
-        print ( "Domain name used is: %s" %(DOMAIN) )
+    logDebug( "Domain name used is: %s" %(DOMAIN) )
 except:
-    print "Error on reading auth file: " + AUTH_FILE
+    logDebug( "Error on reading auth file: " + AUTH_FILE, 2)
     sys.exit(1)
 
 def checkVM( vmname ):
     try:
-        if( DEBUG > 0):
-            print ( "Checking if vm %s exist..." %(vmname) )
+        logDebug( "Checking if vm %s exist..." %(vmname) )
         vm = api.vms.get(name=vmname)
         if vm != None:
-            if( DEBUG > 0):
-                print ( "VM %s exist, now check if is down" %(vmname) )
+            logDebug( "VM %s exist, now check if is down" %(vmname) )
             if vm.get_status().state == 'down':
-                if( DEBUG > 0):
-                    print ( "VM %s is down, continue" %(vmname) )
+                logDebug( "VM %s is down, continue" %(vmname) )
             else:
-                print ( "Error: VM %s is not down is on status %s, Exit" %(vmname, vm.get_status().state) )
+                logDebug( "Error: VM %s is not down is on status %s, Exit" %(vmname, vm.get_status().state), 2 )
                 sys.exit(1)
         else:
-            print ( "Error: VM %s doesn't exist, Exit" %(vmname) )
+            logDebug( "Error: VM %s doesn't exist, Exit" %(vmname), 2 )
             sys.exit(1)
         #now check vm os version
         osVersion = vm.get_os().get_type()
         if (osVersion == "rhel_6x64" or osVersion == "rhel_6" or osVersion == "rhel_7x64"):
-            if( DEBUG > 0):
-                print ( "VM %s has OS version %s which support cloud-init, continue..." %( vmname, osVersion ) )
+            logDebug( "VM %s has OS version %s which support cloud-init, continue..." %( vmname, osVersion ) )
         else:
-            print ( "Error: VM %s has OS version %s which doesn't support cloud-init, Exit" %( vmname, osVersion ) )
+            logDebug( "Error: VM %s has OS version %s which doesn't support cloud-init, Exit" %( vmname, osVersion ), 2 )
             sys.exit(1)
     except Exception, err:
-        print ( "Error on check status for vm %s" %( vmname ) )
-        print Exception, err
+        logDebug( "Error on check status for vm %s" %( vmname ) )
+        logDebug( Exception, 2)
+        logDebug( err, 2)
         sys.exit(1)
 
 def checkSshKey( sshkey ):
     try:
-        if( DEBUG > 0):
-            print ( "Try to read private key %s" %(sshkey) )
+        logDebug( "Try to read private key %s" %(sshkey) )
         open( sshkey ).read()
         sshkeypub = '%s.pub' %(sshkey)
-        if( DEBUG > 0):
-            print ( "Try to read public key %s" %(sshkeypub) )
+        logDebug( "Try to read public key %s" %(sshkeypub) )
         open( sshkeypub ).read()
-        if( DEBUG > 0):
-            print ( "Either private and public keys are readable, continue" )
+        logDebug( "Either private and public keys are readable, continue" )
         return open( sshkeypub ).read()
     except:
-        print ( "Error on reading ssh private/pub key %s" %( sshkey ) )
+        logDebug( "Error on reading ssh private/pub key %s" %( sshkey ), 2 )
         sys.exit(1)
 
 def buildYamlFile():
@@ -246,13 +243,11 @@ def buildYamlFile():
 
 # connect to engine
 try:
-    if( DEBUG > 0):
-        print 'Now try to connect to the engine: ' + ENGINE_CONN
+    logDebug( 'Now try to connect to the engine: ' + ENGINE_CONN )
     
     api = None
     api = API(ENGINE_CONN, insecure=True, username=SUSERNAME, password=SPASSWORD)
-    if( DEBUG > 0):
-        print 'Connection established to the engine: ' + ENGINE_CONN
+    logDebug( 'Connection established to the engine: ' + ENGINE_CONN )
 
     #check if vm exist and is down
     EXIT_ON = 'CHECKVM'
@@ -261,20 +256,17 @@ try:
     #check private and pub key
     EXIT_ON = 'CHECKSSHKEY'
     SSHKEY = checkSshKey( SSHKEY )
-    if( DEBUG > 1):
-        print ( "ssh pub key is: " )
-        print SSHKEY
+    logDebug( "ssh pub key is: " )
+    logDebug( SSHKEY )
 
     #now try to launch vm whith cloud-init options
     EXIT_ON = 'STARTVM'
     FQDN = VMNAME + "." + DOMAIN
     FQDN = FQDN.lower()
-    if( DEBUG > 1):
-        print ( "FQDN: %s" %(FQDN) )
+    logDebug( "FQDN: %s" %(FQDN) )
     scontent = buildYamlFile()
-    if( DEBUG > 1):
-        print ("Cloud-init user data content: ")
-        print scontent
+    logDebug("Cloud-init user data content: ")
+    logDebug( scontent )
 
     try:
         vm = api.vms.get(name=VMNAME)
@@ -306,28 +298,25 @@ try:
                                 )
                             )
                         )
-        if( DEBUG > 0):
-            print ( "Starting VM %s with cloud-init options" %(VMNAME) )
+        logDebug( "Starting VM %s with cloud-init options" %(VMNAME) )
         vm.start( action )
 
         #vm started add sleeptime
         vm = api.vms.get(name=VMNAME)
         while ( vm.get_status().state != 'up' ):
-            if( DEBUG > 0):
-                print ( "VM %s is on state %s, sleeping %s seconds" %( vm.get_name(), vm.get_status().state, str( SLEEPTIME ) ) )
+            logDebug( "VM %s is on state %s, sleeping %s seconds" %( vm.get_name(), vm.get_status().state, str( SLEEPTIME ) ) )
             sleep(SLEEPTIME)
             vm = api.vms.get(name=VMNAME)
         print ( "VM %s is up, with ip %s an IPA client configured, finish." %( vm.get_name(), IPADDR ) )
     except Exception, err:
-        print "Error on starting VM"
-        print err
+        logDebug( "Error on starting VM", 2 )
+        logDebug( err, 2) 
 except:
     if EXIT_ON == '':
-        print 'Error: Connection failed to server: ' + ENGINE_CONN
+        logDebug( 'Error: Connection failed to server: ' + ENGINE_CONN, 2)
     else:
-        print 'Error on ' + EXIT_ON
+        logDebug( 'Error on ' + EXIT_ON, 2)
 finally:
     if api != None:
-        if( DEBUG > 0):
-            print 'Closing connection to the engine: ' + ENGINE_CONN
+        logDebug( 'Closing connection to the engine: ' + ENGINE_CONN )
         api.disconnect()

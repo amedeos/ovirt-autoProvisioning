@@ -258,6 +258,8 @@ try:
     
     EXIT_ON = 'SETNETWORKPROFILE'
     setNetworkProfile(VMNAME, np1, NETNAME)
+    
+    logDebug("Updated on VM %s network interface %s with network profile %s" %(VMNAME, NETNAME, NETPROFILE))
 except:
     if EXIT_ON == '':
         logDebug( 'Error: Connection failed to server: ' + ENGINE_CONN, 2 )

@@ -37,6 +37,7 @@ import ConfigParser
 import os.path
 import re
 from subprocess import call
+import datetime
 
 DEBUG = 0
 
@@ -46,7 +47,7 @@ DEBUG = 0
 MAXCPU = 16
 MAXMEMORY = 64
 
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 
 SHOSTNAME = ''
 SPORT = ''
@@ -154,14 +155,25 @@ if options.DEBUGOPT:
 else:
     DEBUG = 0
 
-if( DEBUG > 0 ):
-    print ( "Authorization filename: %s " %(AUTH_FILE) )
-    print ( "Data Center name: %s " %(DATACENTER) )
-    print ( "Cluster name: %s " %(CLUSTER) )
-    print ( "OS Version: %s " %(OSVERSION) )
-    print ( "VM name: %s " %(VMNAME) )
-    print ( "Memory: %s " %(MEMORY) )
-    print ( "CPU: %s " %(CPU) )
+def logDebug( strDebug, intDebug=None ):
+    global DEBUG
+    if intDebug == None:
+        intDebug = DEBUG
+        if DEBUG > 1:
+            intDebug = 1
+    if (intDebug > 0) and (intDebug < 2):
+        print ("%s DEBUG: %s" %(datetime.datetime.now(), strDebug))
+    elif intDebug > 1:
+        #always print intDebug messages if are > 1
+        print ("%s ERROR: %s" %(datetime.datetime.now(), strDebug))
+
+logDebug( "Authorization filename: %s " %(AUTH_FILE) )
+logDebug( "Data Center name: %s " %(DATACENTER) )
+logDebug( "Cluster name: %s " %(CLUSTER) )
+logDebug( "OS Version: %s " %(OSVERSION) )
+logDebug( "VM name: %s " %(VMNAME) )
+logDebug( "Memory: %s " %(MEMORY) )
+logDebug( "CPU: %s " %(CPU) )
 
 # get auth user / pass
 try:
@@ -174,120 +186,100 @@ try:
         if len( Config.sections() ) == 0:
             print "Error: Wrong auth file: " + AUTH_FILE + ", now exit"
             sys.exit(1)
-    if( DEBUG > 0 ):
-        print "Try to read Username from " + AUTH_FILE
+    logDebug( "Try to read Username from " + AUTH_FILE )
     SUSERNAME = Config.get("Auth", "Username")
-    if( DEBUG > 0 ):
-        print "Found Username: " + SUSERNAME
-        print "Try to read Password from " + AUTH_FILE
+    logDebug( "Found Username: " + SUSERNAME )
+    logDebug( "Try to read Password from " + AUTH_FILE )
     SPASSWORD = Config.get("Auth", "Password")
-    if( DEBUG > 0 ):
-        print "Found Password: ***********"
-        print "Try to read Hostname from " + AUTH_FILE
+    logDebug( "Found Password: ***********" )
+    logDebug( "Try to read Hostname from " + AUTH_FILE )
     SHOSTNAME = Config.get("Auth", "Hostname")
-    if( DEBUG > 0 ):
-        print "Found Hostname: " + SHOSTNAME
-        print "Try to read protocol from " + AUTH_FILE
+    logDebug( "Found Hostname: " + SHOSTNAME )
+    logDebug( "Try to read protocol from " + AUTH_FILE )
     SPROTOCOL = Config.get("Auth", "Protocol")
-    if( DEBUG > 0 ):
-        print "Found Protocol: " + SPROTOCOL
-        print "Try to read Port from " + AUTH_FILE
+    logDebug( "Found Protocol: " + SPROTOCOL )
+    logDebug( "Try to read Port from " + AUTH_FILE )
     SPORT = Config.get("Auth", "Port")
-    if( DEBUG > 0 ):
-        print "Found Port: " + SPORT
+    logDebug( "Found Port: " + SPORT )
     ENGINE_CONN = SPROTOCOL + '://' + SHOSTNAME + ':' + SPORT
-    if( DEBUG > 0 ):
-        print "Connection string: " + ENGINE_CONN
+    logDebug( "Connection string: " + ENGINE_CONN )
 except:
-    print "Error on reading auth file: " + AUTH_FILE
+    logDebug( "Error on reading auth file: " + AUTH_FILE, 2)
     sys.exit(1)
 
 def checkDCExist( datacentername ):
-    if( DEBUG > 0 ):
-        print "Check if DC exist and is up: '" + datacentername + "'"
+    logDebug( "Check if DC exist and is up: '" + datacentername + "'" )
     dc = api.datacenters.get(name=datacentername)
     if dc == None:
-        print "Error: DC " + datacentername + " doesn't exist... Exit"
+        logDebug( "Error: DC " + datacentername + " doesn't exist... Exit", 2)
         sys.exit(1)
     else:
-        if( DEBUG > 0 ):
-            print "DC " + datacentername + " is present...continue"
+        logDebug( "DC " + datacentername + " is present...continue" )
     dcstat = dc.get_status().state
     if dcstat != "up":
-        print "Error: DC " + datacentername + " is not up... Exit"
+        logDebug( "Error: DC " + datacentername + " is not up... Exit", 2)
         sys.exit(1)
 
 def checkCluster( clustername, datacentername ):
-    if( DEBUG > 0 ):
-        print ( "Check if Cluster %s is on DC %s" %(clustername, datacentername) )
+    logDebug( "Check if Cluster %s is on DC %s" %(clustername, datacentername) )
     dc = api.datacenters.get(name=datacentername)
     c1 = api.clusters.get(name=clustername)
     dctemp = c1.get_data_center()
     
     if dctemp.get_id() == dc.get_id():
-        if( DEBUG > 0 ):
-            print ( "Cluster %s is on DC %s... Continue" %( clustername, datacentername ) )
+        logDebug( "Cluster %s is on DC %s... Continue" %( clustername, datacentername ) )
 
 def getTemplateFromOS( osversion, datacentername ):
-    if( DEBUG > 0 ):
-        print ( "Check if there are almost one template for OS %s on DC %s" %( osversion, datacentername ) )
+    logDebug( "Check if there are almost one template for OS %s on DC %s" %( osversion, datacentername ) )
     templatelist = api.templates.list("datacenter=" + datacentername)
     tname = ""
     tnum = 0
     for t in templatelist:
-        if( DEBUG > 1 ):
-            print ( "Found template %s" %( t.get_name() ) )
+        logDebug( "Found template %s" %( t.get_name() ) )
         if t.get_os().get_type() == osversion:
-            if( DEBUG > 1 ):
-                print ( "Template %s is for os %s, now check it's name" %( t.get_name(), osversion ) )
+            logDebug( "Template %s is for os %s, now check it's name" %( t.get_name(), osversion ) )
             searchObj = re.search( r'^(\D\w*)-(\d*)-(\D\w*)', str(t.get_name()), re.M|re.I)
             if searchObj != None:
                 if tname == "":
-                    if( DEBUG > 1 ):
-                        print ( "Setting template %s for DC %s" %( t.get_name(), datacentername ) )
+                    logDebug( "Setting template %s for DC %s" %( t.get_name(), datacentername ) )
                     tname = t.get_name()
                     tnum = searchObj.group(2)
                 else:
                     if searchObj.group(2) > tnum:
-                        if( DEBUG > 1 ):
-                            print ( "Setting template %s for DC %s" %( t.get_name(), datacentername ) )
+                        logDebug( "Setting template %s for DC %s" %( t.get_name(), datacentername ) )
                         tname = t.get_name()
                         tnum = searchObj.group(2)
         else:
-            if( DEBUG > 1 ):
-                print ( "Template %s is for os %s and NOT for os %s " %( t.get_name(), t.get_os().get_type(), osversion ) )
+            logDebug( "Template %s is for os %s and NOT for os %s " %( t.get_name(), t.get_os().get_type(), osversion ) )
     return tname
 
 def checkVMName( vmname ):
-    if( DEBUG > 0):
-        print ( "Check if vm name %s already exist..." %( vmname ) )
+    logDebug( "Check if vm name %s already exist..." %( vmname ) )
     vm1 = api.vms.get(name = vmname)
     if vm1 != None:
-        print ( "Error: VM %s is already present...Exit" %( vmname ) )
+        logDebug( "Error: VM %s is already present...Exit" %( vmname ), 2)
         sys.exit(1)
 
 def updateDiskAlias( vmname ):
-    if( DEBUG > 0):
-        print ( "Updating disk alias for VM %s" %( vmname ) )
+    logDebug( "Updating disk alias for VM %s" %( vmname ) )
     try:
         vm = api.vms.get(name=vmname)
         vmdisk = vm.disks.list()[0]
         if vmdisk.get_status().state == 'ok':
-            if( DEBUG > 1):
-                print ( "Disk %s is on ok status, continue" %( vmdisk.get_alias() ) )
+            logDebug( "Disk %s is on ok status, continue" %( vmdisk.get_alias() ) )
             dname = str(vmname) + '_Disk1'
             vmdisk.set_alias( dname )
             vmdisk.update()
         else:
-            print ( "Error: disk is not on ok status...Exit" )
+            logDebug( "Error: disk is not on ok status...Exit", 2 )
     except Exception, err:
-        print ( "Error on updating disk alias for VM %s" %( vmname ) )
-        print Exception, err
+        logDebug( "Error on updating disk alias for VM %s" %( vmname ), 2 )
+        logDebug( Exception, 2)
+        logDebug( err, 2)
         sys.exit(1)
 
 def updateCpuNumber( vmname, cpunum ):
-    if( DEBUG > 0):
-        print ( "Updating CPU number for VM %s setting total CPU to: %s" %( vmname, cpunum ) )
+    logDebug( "Updating CPU number for VM %s setting total CPU to: %s" %( vmname, cpunum ) )
     #check if is down
     try:
         vm = api.vms.get(name=vmname)
@@ -297,19 +289,18 @@ def updateCpuNumber( vmname, cpunum ):
             vm.set_cpu(c1)
             vm.update()
     except Exception, err:
-        print ( "Error on updating CPU for VM %s" %( vmname ) )
-        print Exception, err
+        logDebug( "Error on updating CPU for VM %s" %( vmname ), 2 )
+        logDebug( Exception, 2)
+        logDebug( err, 2)
         sys.exit(1)
 
 # connect to engine
 try:
-    if( DEBUG > 0):
-        print 'Now try to connect to the engine: ' + ENGINE_CONN
+    logDebug( 'Now try to connect to the engine: ' + ENGINE_CONN )
     
     api = None
     api = API(ENGINE_CONN, insecure=True, username=SUSERNAME, password=SPASSWORD)
-    if( DEBUG > 0):
-        print 'Connection established to the engine: ' + ENGINE_CONN
+    logDebug( 'Connection established to the engine: ' + ENGINE_CONN )
     
     # verify if datacenter is up
     EXIT_ON = "CHECKDC"
@@ -323,10 +314,9 @@ try:
     EXIT_ON = "GETTEMPLATE"
     templatename = getTemplateFromOS(OSVERSION, DATACENTER)
     if templatename == "":
-        print ( "Error: Template not found on DC %s for os %s...Exit" %( DATACENTER, OSVERSION ) )
+        logDebug( "Error: Template not found on DC %s for os %s...Exit" %( DATACENTER, OSVERSION ), 2 )
         sys.exit(1)
-    if( DEBUG > 0):
-        print ( "Using template %s" %( templatename ) )
+    logDebug( "Using template %s" %( templatename ) )
 
     # check if vmname already exist
     EXIT_ON = "CHECKVMNAME"
@@ -334,8 +324,7 @@ try:
 
     #now try to create a new vm
     try:
-        if( DEBUG > 0):
-            print ( "Creating VM %s..." %( VMNAME ) )
+        logDebug( "Creating VM %s..." %( VMNAME ) )
         sdesc = "Created by addNewVM.py"
         # 70% memory guaranteed
         mguaranteed = int(MEMORY*GB*0.70)
@@ -344,19 +333,18 @@ try:
                               memory_policy=params.MemoryPolicy(guaranteed=mguaranteed),
                               disks=params.Disks(clone=False)
                               ))
-        if( DEBUG > 0):
-            print ( "VM %s created, waiting to disk allocation (preallocated disk)" %( VMNAME ) )
+        logDebug( "VM %s created, waiting to disk allocation (preallocated disk)" %( VMNAME ) )
         #now wait until is down
         vm = api.vms.get(name=VMNAME)
         while ( vm.get_status().state != 'down' ):
-            if( DEBUG > 0):
-                print ( "VM %s is on state %s, sleeping %s seconds" %( vm.get_name(), vm.get_status().state, str( SLEEPTIME ) ) )
+            logDebug( "VM %s is on state %s, sleeping %s seconds" %( vm.get_name(), vm.get_status().state, str( SLEEPTIME ) ) )
             sleep(SLEEPTIME)
             vm = api.vms.get(name=VMNAME)
 
     except Exception, err:
-        print ( "Error on creating a new vm %s" %( VMNAME ) )
-        print Exception, err
+        logDebug( "Error on creating a new vm %s" %( VMNAME ), 2 )
+        logDebug( Exception, 2)
+        logDebug( err, 2)
 
     #rename disk alias
     EXIT_ON = "UPDATEDISKALIAS"
@@ -371,11 +359,10 @@ try:
 
 except:
     if EXIT_ON == '':
-        print 'Error: Connection failed to server: ' + ENGINE_CONN
+        logDebug( 'Error: Connection failed to server: ' + ENGINE_CONN, 2)
     else:
-        print 'Error on ' + EXIT_ON
+        logDebug( 'Error on ' + EXIT_ON, 2)
 finally:
     if api != None:
-        if( DEBUG > 0):
-            print 'Closing connection to the engine: ' + ENGINE_CONN
+        logDebug( 'Closing connection to the engine: ' + ENGINE_CONN )
         api.disconnect()

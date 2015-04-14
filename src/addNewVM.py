@@ -65,7 +65,7 @@ SLEEPTIME = 10
 
 parser = OptionParser()
 usagestr = "usage: %prog [--debug NUMBER] --authfile AUTHFILE --datacenter DATACENTERNAME "
-usagestr = usagestr + "--cluster CLUSTERNAME --os OSVERSION --vmname VMNAME "
+usagestr = usagestr + "--cluster CLUSTERNAME --os OSVERSION [--osrelease OSRELEASE] --vmname VMNAME "
 usagestr = usagestr + "--memory GB --cpu NUM"
 
 parser = OptionParser(usage=usagestr, version="%prog Version: " + VERSION)
@@ -83,7 +83,10 @@ parser.add_option("--cluster", type="string",dest="CLUSTER",
                   help="Cluster name where VM will be reside")
 
 parser.add_option("--os", type="string",dest="OSVERSION",
-                  help="Operating system verion, eg rhel_6x64")
+                  help="Operating system version, eg rhel_6x64")
+
+parser.add_option("--osrelease", type="int",dest="OSRELEASE",
+                  help="Optional operating system release version, eg 5, means level 5 of minor release")
 
 parser.add_option("--vmname", type="string",dest="VMNAME",
                   help="VM Name")
@@ -135,6 +138,7 @@ AUTH_FILE = options.AUTH_FILE
 DATACENTER = options.DATACENTER
 CLUSTER = options.CLUSTER
 OSVERSION = options.OSVERSION
+OSRELEASE = None
 VMNAME = options.VMNAME
 MEMORY = int(options.MEMORY)
 CPU = int(options.CPU)
@@ -155,6 +159,10 @@ if options.DEBUGOPT:
 else:
     DEBUG = 0
 
+if options.OSRELEASE:
+    if type( options.OSRELEASE ) == int:
+        OSRELEASE = int( options.OSRELEASE )
+
 def logDebug( strDebug, intDebug=None ):
     global DEBUG
     if intDebug == None:
@@ -174,6 +182,7 @@ logDebug( "OS Version: %s " %(OSVERSION) )
 logDebug( "VM name: %s " %(VMNAME) )
 logDebug( "Memory: %s " %(MEMORY) )
 logDebug( "CPU: %s " %(CPU) )
+logDebug( "OS Release: %s" %(OSRELEASE))
 
 # get auth user / pass
 try:
@@ -229,8 +238,10 @@ def checkCluster( clustername, datacentername ):
     if dctemp.get_id() == dc.get_id():
         logDebug( "Cluster %s is on DC %s... Continue" %( clustername, datacentername ) )
 
-def getTemplateFromOS( osversion, datacentername ):
+def getTemplateFromOS( osversion, datacentername, osrelease=None ):
     logDebug( "Check if there are almost one template for OS %s on DC %s" %( osversion, datacentername ) )
+    if osrelease != None:
+        logDebug("and try to finding template with release number %s" %(osrelease))
     templatelist = api.templates.list("datacenter=" + datacentername)
     tname = ""
     tnum = 0
@@ -238,7 +249,10 @@ def getTemplateFromOS( osversion, datacentername ):
         logDebug( "Found template %s" %( t.get_name() ) )
         if t.get_os().get_type() == osversion:
             logDebug( "Template %s is for os %s, now check it's name" %( t.get_name(), osversion ) )
-            searchObj = re.search( r'^(\D\w*)-(\d*)-(\D\w*)', str(t.get_name()), re.M|re.I)
+            if osrelease == None:
+                searchObj = re.search( r'^(\D\w*)-(\d*)-(\D\w*)', str(t.get_name()), re.M|re.I)
+            else:
+                searchObj = re.search( r'^(\D\w*' + str(osrelease) + ')-(\d*)-(\D\w*)', str(t.get_name()), re.M|re.I)
             if searchObj != None:
                 if tname == "":
                     logDebug( "Setting template %s for DC %s" %( t.get_name(), datacentername ) )
@@ -312,12 +326,15 @@ try:
 
     # get template name from os version
     EXIT_ON = "GETTEMPLATE"
-    templatename = getTemplateFromOS(OSVERSION, DATACENTER)
+    templatename = getTemplateFromOS(OSVERSION, DATACENTER, OSRELEASE)
     if templatename == "":
-        logDebug( "Error: Template not found on DC %s for os %s...Exit" %( DATACENTER, OSVERSION ), 2 )
+        if OSRELEASE == None:
+            logDebug( "Error: Template not found on DC %s for os %s...Exit" %( DATACENTER, OSVERSION ), 2 )
+        else:
+            logDebug( "Error: Template not found on DC %s for os %s and release %s...Exit" %( DATACENTER, OSVERSION, OSRELEASE ), 2 )
         sys.exit(1)
     logDebug( "Using template %s" %( templatename ) )
-
+    
     # check if vmname already exist
     EXIT_ON = "CHECKVMNAME"
     checkVMName(VMNAME)
